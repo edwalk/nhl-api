@@ -78,9 +78,10 @@ def db_connector(df, username, password, host, database, table_name):
     engine = create_engine(connection_string)
     
     try:
-        df.to_sql(name=table_name, con=engine, if_exists='replace', index=False)
+        df.to_sql(name=table_name, con=engine, if_exists='append', index=False)
         print("DataFrame has been sent to the MySQL database.")
     
+
     except Exception as e:
         print(f"An error occurred: {e}")
         
@@ -88,11 +89,14 @@ def db_connector(df, username, password, host, database, table_name):
         engine.dispose()
         print("Engine has been disposed.")
         
-        
-config = configparser.ConfigParser()
-config.read('config.ini')
-db_config = config['database']
 
+def parse_config():  
+    config = configparser.ConfigParser()
+    config.read('config.ini')
+    db_config = config['database']
+    return db_config
+
+db_config = parse_config()
 data_list = parse_data()
 df = toDf(data_list)
 
