@@ -5,7 +5,7 @@ import time
 from sqlalchemy import create_engine
 import configparser
 
-def import_player_data():
+def ingest_player_summary_data():
     
     seasonId = int(input("Enter a season ID (i.e. 20232024): "))
     data = requests.get(f'https://api.nhle.com/stats/rest/en/skater/summary?limit=-1&cayenneExp=seasonId={seasonId}')
@@ -23,10 +23,12 @@ def import_player_data():
         print(f"There was an error with the API call, no data created (error: {data.status_code})")
         
     return data.json()
+
+
     
 
 def parse_data():
-    parsed_data = import_player_data()
+    parsed_data = ingest_player_summary_data()
     data_list = []
     loop_counter = 0 
 
