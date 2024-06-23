@@ -12,10 +12,12 @@
 #     secondYear += 1
 import requests
 import json 
+import configparser
+import time
 
 def request_full_player_bios_data():  
-    year_1 = 2021
-    year_2 = 2022
+    year_1 = 1917
+    year_2 = 1918
     full_data = []
     
     while year_1 <= 2023 and year_2 <= 2024:
@@ -35,8 +37,8 @@ def request_full_player_bios_data():
     return full_data
     
 def parse_player_bios_data():
-    year_1 = 2021
-    year_2 = 2022
+    year_1 = 1917
+    year_2 = 1918
     seasonId = str(year_1) + str(year_2)
     data = request_full_player_bios_data()
     data_list = []
@@ -79,8 +81,51 @@ def parse_player_bios_data():
                 
     return data_list
 
+def toDf(data_list):    
+    df = pd.DataFrame(data_list)
+    df['ingestionTimestamp'] = time.time()
+    df['ingestionTimestamp'] = pd.to_datetime(df['ingestionTimestamp'], unit = 's')
+    return df
+  
+
+
+def db_connector(df, username, password, host, database, table_name):
+    connection_string = f'mysql+mysqlconnector://{username}:{password}@{host}/{database}'
+    
+    engine = create_engine(connection_string, pool_pre_ping=True, pool_recycle=1800)
+    
+    try:
+        with engine.begin() as connection:
+            df.to_sql(name=table_name, con=engine, if_exists='append', index=False)
+            print("DataFrame has been sent to the MySQL database.")
+    
+
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        
+        
+    finally:
+        engine.dispose()
+        print("Engine has been disposed.")
+        
+
+def parse_config():  
+    config = configparser.ConfigParser()
+    config.read('config.ini')
+    db_config = config['database']
+    return db_config
 
 data_list = parse_player_bios_data()
 
-with open("full_data.json", "w") as outfile:
-    json.dump(data_list, outfile, indent=4)
+batch_counter = 0
+batch_start = -1
+batch_end = 0
+
+while batch_end <= len(data_list):
+    batch = []
+    batch_end = 1000
+    batch = data_list[batch_start+1:batch_end]
+    
+    for i in batch:
+        df = toDf(data_list)
+        db_connector(df, db_config['username'], db_config['password'], db_config['host'], db_config['database'], db_config['players_bios_raw'])

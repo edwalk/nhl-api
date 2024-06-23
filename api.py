@@ -19,14 +19,14 @@ def request_player_summary_data():
     return data.json()
 
 
-def request_full_player_bios_data():  
+def request_full_player_regular_season_bios_data():  
     year_1 = 1917
     year_2 = 1918
     full_data = []
     
     while year_1 <= 2023 and year_2 <= 2024:
         seasonId = str(year_1)+str(year_2)
-        response = requests.get(f'https://api.nhle.com/stats/rest/en/skater/bios?limit=-1&cayenneExp=seasonId={seasonId}')
+        response = requests.get(f'https://api.nhle.com/stats/rest/en/skater/bios?limit=-1&&gameType=2&cayenneExp=seasonId={seasonId}')
 
         if response.status_code == 200:       
             print(f"Data collected and saved successfully for season {year_1} - {year_2}")
@@ -44,7 +44,7 @@ def parse_player_bios_data():
     year_1 = 1917
     year_2 = 1918
     seasonId = str(year_1) + str(year_2)
-    data = request_full_player_bios_data()
+    data = request_full_player_regular_season_bios_data()
     data_list = []
     
     for season in data:
@@ -135,7 +135,7 @@ def toDf(data_list):
 def db_connector(df, username, password, host, database, table_name):
     connection_string = f'mysql+mysqlconnector://{username}:{password}@{host}/{database}'
     
-    engine = create_engine(connection_string)
+    engine = create_engine(connection_string, pool_pre_ping=True, pool_recycle=1800)
     
     try:
         with engine.begin() as connection:
@@ -158,20 +158,47 @@ def parse_config():
     db_config = config['database']
     return db_config
 
-
 def menu():
     print("Welcome to the NHL API Ingestor.\n Please select one of the following:\n 1. Ingest Player Bios \n 2.Ingest Player Summary Stats")
     selection = input("Select of the options above by entering the corresponding number: ")
     
     return selection
 
+def batch_ingestion(data_list):
+    batch_counter = 0
+    batch_start = -1
+    batch_end = 0
+    total_expected_batches = round(len(data_list) / 5000, 0)
+
+    while batch_end < len(data_list):
+        batch = []
+        if len(data_list) - batch_end >= 5000:
+            batch_end += 5000
+        else: 
+            batch_end += len(data_list) - batch_end
+            
+        batch = data_list[batch_start+1:batch_end]
+        
+    
+        df = toDf(batch)
+        db_connector(df, db_config['username'], db_config['password'], db_config['host'], db_config['database'], db_config['players_bios_raw'])
+        
+        batch_start = batch_end
+        batch_counter += 1
+        print(f"Batch {batch_counter} completed ({batch_counter}/{total_expected_batches})")
+        print(f"batch start is {batch_start}")
+        print(f"Batch end is {batch_end}")
+        print(f"Len of data_list is {len(data_list)}")
+        
+        
+        
+    
 db_config = parse_config()
 selection = int(menu())
 
 if selection == 1:
     data_list = parse_player_bios_data()
-    df = toDf(data_list)
-    db_connector(df, db_config['username'], db_config['password'], db_config['host'], db_config['database'], db_config['players_bios_raw'])
+    batch_ingestion(data_list)
     
 else: 
     print("Nothing to do for now.")
