@@ -5,18 +5,12 @@ import time
 from sqlalchemy import create_engine
 import configparser
 
-def ingest_player_summary_data():
+def request_player_summary_data():
     
-    seasonId = int(input("Enter a season ID (i.e. 20232024): "))
+    seasonId = int(input("Enter a season ID (i.e. 20232024): ")) # This needs to be modified to cycle through seasons.
     data = requests.get(f'https://api.nhle.com/stats/rest/en/skater/summary?limit=-1&cayenneExp=seasonId={seasonId}')
 
-    if data.status_code == 200:
-        
-
-        f_data = json.dumps(data.json(), indent=4)
-        with open("data.json", "w") as outfile:
-            outfile.write(f_data)
-        
+    if data.status_code == 200:       
         print("Data collected and saved successfully.")
         
     else:
@@ -25,12 +19,76 @@ def ingest_player_summary_data():
     return data.json()
 
 
+def request_full_player_bios_data():  
+    year_1 = 1917
+    year_2 = 1918
+    full_data = []
     
+    while year_1 <= 2023 and year_2 <= 2024:
+        seasonId = str(year_1)+str(year_2)
+        response = requests.get(f'https://api.nhle.com/stats/rest/en/skater/bios?limit=-1&cayenneExp=seasonId={seasonId}')
 
-def parse_data():
-    parsed_data = ingest_player_summary_data()
+        if response.status_code == 200:       
+            print(f"Data collected and saved successfully for season {year_1} - {year_2}")
+            year_1 += 1
+            year_2 += 1
+            full_data.append(response.json())
+        
+        else:
+            print(f"There was an error with the API call, no data created (error: {response.status_code})")
+            break
+        
+    return full_data
+    
+def parse_player_bios_data():
+    year_1 = 1917
+    year_2 = 1918
+    seasonId = str(year_1) + str(year_2)
+    data = request_full_player_bios_data()
     data_list = []
-    loop_counter = 0 
+    
+    for season in data:
+        for player in season['data']:
+            dict_container = {
+                'assists': player['assists'],
+                'birthCity': player['birthCity'],
+                'birthCountryCode': player['birthCountryCode'],
+                'birthDate': player['birthDate'],
+                'birthStateProvinceCode': player['birthStateProvinceCode'],
+                'currentTeamAbbrev': player['currentTeamAbbrev'],
+                'currentTeamName': player['currentTeamName'],
+                'draftOverall': player['draftOverall'],
+                'draftRound': player['draftRound'],
+                'draftYear': player['draftYear'],
+                'firstSeasonForGameType': player['firstSeasonForGameType'],
+                'gamesPlayed': player['gamesPlayed'],
+                'goals': player['gamesPlayed'],
+                'height': player['height'],
+                'isInHallOfFameYn': player['isInHallOfFameYn'],
+                'lastName': player['lastName'],
+                'nationalityCode': player['nationalityCode'],
+                'playerId': player['playerId'],
+                'points': player['points'],
+                'positionCode': player['positionCode'],
+                'shootsCatches': player['shootsCatches'],
+                'skaterFullName': player['skaterFullName'],
+                'weight': player['weight'],
+                'seasonId': seasonId
+            }
+            
+            data_list.append(dict_container)
+            
+        year_1 += 1
+        year_2 += 1
+        seasonId = str(year_1) + str(year_2)
+            
+                
+    return data_list
+    
+def parse_player_summary_data():
+    parsed_data = request_player_summary_data()
+    data_list = []
+    
 
     for player in parsed_data['data']:
         dict_container = {
@@ -80,12 +138,14 @@ def db_connector(df, username, password, host, database, table_name):
     engine = create_engine(connection_string)
     
     try:
-        df.to_sql(name=table_name, con=engine, if_exists='append', index=False)
-        print("DataFrame has been sent to the MySQL database.")
+        with engine.begin() as connection:
+            df.to_sql(name=table_name, con=engine, if_exists='append', index=False)
+            print("DataFrame has been sent to the MySQL database.")
     
 
     except Exception as e:
         print(f"An error occurred: {e}")
+        
         
     finally:
         engine.dispose()
@@ -98,8 +158,20 @@ def parse_config():
     db_config = config['database']
     return db_config
 
-db_config = parse_config()
-data_list = parse_data()
-df = toDf(data_list)
 
-db_connector(df, db_config['username'], db_config['password'], db_config['host'], db_config['database'], db_config['players_stats_summary_raw'])
+def menu():
+    print("Welcome to the NHL API Ingestor.\n Please select one of the following:\n 1. Ingest Player Bios \n 2.Ingest Player Summary Stats")
+    selection = input("Select of the options above by entering the corresponding number: ")
+    
+    return selection
+
+db_config = parse_config()
+selection = int(menu())
+
+if selection == 1:
+    data_list = parse_player_bios_data()
+    df = toDf(data_list)
+    db_connector(df, db_config['username'], db_config['password'], db_config['host'], db_config['database'], db_config['players_bios_raw'])
+    
+else: 
+    print("Nothing to do for now.")

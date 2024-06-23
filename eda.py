@@ -1,7 +1,7 @@
 import requests
 import json
 
-data = requests.get(f'https://api.nhle.com/stats/rest/en/skater/bios?limit=-1&cayenneExp=seasonId=20232024')
+data = requests.get(f'https://api.nhle.com/stats/rest/en/skater/bios?limit=-1&cayenneExp')
 
 if data.status_code == 200:
         
