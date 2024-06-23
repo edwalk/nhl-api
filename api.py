@@ -1,7 +1,7 @@
 import requests
 import json
 import pandas as pd
-import time
+import datetime
 from sqlalchemy import create_engine
 import configparser
 
@@ -26,7 +26,7 @@ def request_full_player_regular_season_bios_data():
     
     while year_1 <= 2023 and year_2 <= 2024:
         seasonId = str(year_1)+str(year_2)
-        response = requests.get(f'https://api.nhle.com/stats/rest/en/skater/bios?limit=-1&&gameType=2&cayenneExp=seasonId={seasonId}')
+        response = requests.get(f'https://api.nhle.com/stats/rest/en/skater/bios?limit=-1&isGame=true&cayenneExp=seasonId={seasonId}')
 
         if response.status_code == 200:       
             print(f"Data collected and saved successfully for season {year_1} - {year_2}")
@@ -124,9 +124,9 @@ def parse_player_summary_data():
         
     return data_list
     
-def toDf(data_list):    
+def toDf(data_list, time):    
     df = pd.DataFrame(data_list)
-    df['ingestionTimestamp'] = time.time()
+    df['ingestionTimestamp'] = time
     df['ingestionTimestamp'] = pd.to_datetime(df['ingestionTimestamp'], unit = 's')
     return df
   
@@ -165,8 +165,9 @@ def menu():
     return selection
 
 def batch_ingestion(data_list):
+    time = datetime.datetime.now()
     batch_counter = 0
-    batch_start = -1
+    batch_start = 0
     batch_end = 0
     total_expected_batches = round(len(data_list) / 5000, 0)
 
@@ -177,16 +178,15 @@ def batch_ingestion(data_list):
         else: 
             batch_end += len(data_list) - batch_end
             
-        batch = data_list[batch_start+1:batch_end]
+        batch = data_list[batch_start:batch_end]
         
     
-        df = toDf(batch)
+        df = toDf(batch, time)
         db_connector(df, db_config['username'], db_config['password'], db_config['host'], db_config['database'], db_config['players_bios_raw'])
-        
+        print(f"batch start is {batch_start}")
         batch_start = batch_end
         batch_counter += 1
         print(f"Batch {batch_counter} completed ({batch_counter}/{total_expected_batches})")
-        print(f"batch start is {batch_start}")
         print(f"Batch end is {batch_end}")
         print(f"Len of data_list is {len(data_list)}")
         
